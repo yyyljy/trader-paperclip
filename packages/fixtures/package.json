@@ -1,0 +1,15 @@
+{
+  "name": "@trader-paperclip/fixtures",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "pnpm exec tsup src/index.ts --format esm --dts --out-dir dist --clean",
+    "typecheck": "pnpm exec tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@trader-paperclip/contracts": "workspace:*"
+  }
+}

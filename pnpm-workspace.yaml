@@ -1,0 +1,10 @@
+packages:
+  - apps/api
+  - apps/scheduler
+  - apps/web
+  - apps/worker
+  - packages/config
+  - packages/contracts
+  - packages/db
+  - packages/fixtures
+  - packages/foundation

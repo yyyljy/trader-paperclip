@@ -4,6 +4,10 @@ These documents were copied from the Paperclip-managed project workspace to seed
 
 They are the authoritative starting point for the first executable implementation slices.
 
+Repo-local bootstrap references now live alongside the managed pack:
+
+- `environment-contract.md`
+
 ## Included Documents
 
 - `backend_agent_architecture.md`

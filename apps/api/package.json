@@ -1,0 +1,22 @@
+{
+  "name": "@trader-paperclip/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "pnpm exec tsc -p tsconfig.json",
+    "dev": "pnpm exec tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "pnpm exec tsc --noEmit -p tsconfig.json",
+    "test": "pnpm exec vitest run --config ../../vitest.config.ts",
+    "db:migrate": "pnpm exec tsx src/migrate.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.0.1",
+    "@trader-paperclip/config": "workspace:*",
+    "@trader-paperclip/foundation": "workspace:*",
+    "fastify": "^5.3.3"
+  }
+}

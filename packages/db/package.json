@@ -1,0 +1,11 @@
+{
+  "name": "@trader-paperclip/db",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "migrate": "tsx src/cli.ts migrate",
+    "migrate:check": "tsx src/cli.ts check",
+    "build": "pnpm exec tsup src/cli.ts --format esm --platform node --out-dir dist --clean",
+    "typecheck": "pnpm exec tsc --noEmit -p tsconfig.json"
+  }
+}

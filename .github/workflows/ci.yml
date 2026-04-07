@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: corepack pnpm lint
+
+      - name: Typecheck
+        run: corepack pnpm typecheck
+
+      - name: Test
+        run: corepack pnpm test
+
+      - name: Build
+        run: corepack pnpm build
+
+      - name: Validate migrations
+        run: corepack pnpm db:migrate
+
+      - name: Build API image
+        run: docker build -f docker/api.Dockerfile .
+
+      - name: Build worker image
+        run: docker build -f docker/worker.Dockerfile .
+
+      - name: Build scheduler image
+        run: docker build -f docker/scheduler.Dockerfile .
+
+      - name: Build web image
+        run: docker build -f docker/web.Dockerfile .

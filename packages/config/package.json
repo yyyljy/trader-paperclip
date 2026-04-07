@@ -1,0 +1,22 @@
+{
+  "name": "@trader-paperclip/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsc -p tsconfig.json",
+    "typecheck": "pnpm exec tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@trader-paperclip/contracts": "workspace:*",
+    "zod": "^3.24.4"
+  }
+}

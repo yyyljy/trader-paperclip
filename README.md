@@ -1,41 +1,102 @@
 # trader-paperclip
 
-Canonical implementation repository for Paperclip's multi-agent stock market prediction service.
+Canonical implementation repository for Paperclip's analyst workbench and modular-monolith runtime.
 
-## Status
+## What Landed In This Bootstrap
 
-This repository was empty when it was linked into Paperclip. The first commit seeds the repo with the approved product and engineering documents that currently define the implementation contract.
+- `pnpm` workspace with four executable apps: `api`, `worker`, `scheduler`, and `web`
+- shared packages for `contracts`, `config`, and the fixture-backed `foundation` substrate
+- replay-aware `GET /v1/workbench/bootstrap` and SSE flow aligned to the approved phase-1 backend notes
+- stable root task entrypoints for install, lint, typecheck, test, build, and migrations
+- Dockerfiles, a synthetic-first local compose path, and a GitHub Actions CI workflow
 
-This is intentionally honest:
+The managed spec pack in [`docs/managed-spec-pack`](./docs/managed-spec-pack) remains the source of truth for product and workflow behavior. This repo now turns that contract into a runnable codebase instead of a docs-only shell.
 
-- there is no hidden application scaffold
-- there is no runnable backend or frontend yet
-- the managed spec pack is the current source of truth until the first executable slices land
-
-## What This Initial Commit Contains
-
-- `docs/managed-spec-pack/`: approved architecture, delivery, and repo-triage documents copied from the managed Paperclip project workspace
-- `docs/README.md`: index of the seeded documents and what each one is for
-- `.gitignore`: baseline ignores for the expected Node and TypeScript toolchain
-
-## Immediate Next Engineering Slices
-
-1. Create the canonical repo structure for `api`, `worker`, `scheduler`, and the workbench web client.
-2. Lock one stable task runner and package-manager interface for install, lint, typecheck, test, build, and migrations.
-3. Land the first backend foundation slice centered on `GET /v1/workbench/bootstrap`, session and RBAC resolution, audit envelope baseline, lock or stale-state support, and SSE wiring.
-4. Hand a stable repo path and branch to product engineering so the first workbench shell can start without another routing pass.
-
-## Planned Repository Shape
+## Workspace Layout
 
 ```text
 trader-paperclip/
-  apps-or-services/
+  apps/
     api/
-    worker/
     scheduler/
     web/
+    worker/
   packages/
+    config/
+    contracts/
+    fixtures/
+    foundation/
+  docker/
   docs/
+  fixtures/
+  migrations/
 ```
 
-The exact workspace layout is still owned by the follow-on backend bootstrap work. This commit exists to establish the canonical repo and preserve the approved implementation context in-repo.
+## Prerequisites
+
+- Node.js 22+
+- Corepack enabled so `pnpm` resolves consistently
+
+```powershell
+corepack enable
+corepack pnpm install
+```
+
+## Root Task Runner
+
+- `corepack pnpm lint`
+- `corepack pnpm typecheck`
+- `corepack pnpm test`
+- `corepack pnpm build`
+- `corepack pnpm db:migrate`
+
+Service-specific entrypoints:
+
+- `corepack pnpm dev:api`
+- `corepack pnpm dev:worker`
+- `corepack pnpm dev:scheduler`
+- `corepack pnpm dev:web`
+- `corepack pnpm dev`
+
+## Local Synthetic Bootstrap
+
+1. Install dependencies: `corepack pnpm install`
+2. Copy `.env.example` to `.env` if you want overrides
+3. Start the stack: `corepack pnpm dev`
+4. Open the workbench shell at `http://localhost:5173`
+5. Hit the API directly at `http://localhost:4000/healthz`
+
+Local stays synthetic-first:
+
+- no live vendor credentials
+- no secret-manager dependency
+- fixture-backed bootstrap, SSE, worker, and scheduler behavior
+- migration validation through the repo-local SQL in `migrations/`
+
+## Services
+
+- `apps/api`: Fastify API serving health, readiness, fixture-backed bootstrap, and SSE replay
+- `apps/worker`: worker runtime exposing health and readiness against the same fixture foundation
+- `apps/scheduler`: scheduler runtime exposing health and readiness against the same fixture foundation
+- `apps/web`: Vite workbench shell that renders the bootstrap contract and fallback state
+
+## Environment Contract
+
+The explicit repo-local environment schema lives in [`docs/environment-contract.md`](./docs/environment-contract.md).
+
+## Containers And CI
+
+- Dockerfiles live under [`docker`](./docker)
+- local compose path lives at [`docker/compose.local.yml`](./docker/compose.local.yml)
+- CI workflow lives at [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
+
+## Current Slice Boundary
+
+This bootstrap intentionally stops at the first executable substrate:
+
+- health and readiness surface
+- shared config contract
+- synthetic `GET /v1/workbench/bootstrap`
+- SSE authorization and replay logic
+
+It does not yet implement the first persistent triage, authoring, review, or packet workflows from the managed spec pack. Those remain the next backend-owned slices after the repo bootstrap.

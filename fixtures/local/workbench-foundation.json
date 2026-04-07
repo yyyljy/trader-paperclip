@@ -1,0 +1,411 @@
+{
+  "metadata": {
+    "as_of_timestamp": "2026-04-08T12:00:00Z",
+    "session_date": "2026-04-08",
+    "timezone": "America/New_York",
+    "heartbeat_interval_sec": 15,
+    "retry_ms": 2000
+  },
+  "feature_flags": {
+    "triage_board": true,
+    "draft_workspace": true,
+    "review_queue": true,
+    "session_board": true,
+    "packet_desk": true,
+    "diff_modal": true,
+    "sse_replay": true
+  },
+  "sessions": [
+    {
+      "session_id": "session-analysis-lead",
+      "actor": {
+        "actor_id": "actor-analysis-lead",
+        "actor_type": "human",
+        "display_name": "AnalysisLead",
+        "role_key": "analysis_lead"
+      },
+      "auth_context": {
+        "provider": "local_stub",
+        "subject": "analysis.lead",
+        "assurance_level": "dev_stub",
+        "environment": "local",
+        "issued_at": "2026-04-08T11:00:00Z",
+        "expires_at": "2026-04-08T20:00:00Z"
+      },
+      "preferences": {
+        "selected_desk": "cross_desk",
+        "saved_view": "pre_market",
+        "default_route": "triage"
+      }
+    },
+    {
+      "session_id": "session-tmt-lead",
+      "actor": {
+        "actor_id": "actor-tmt-lead",
+        "actor_type": "human",
+        "display_name": "TMTLead",
+        "role_key": "sector_lead"
+      },
+      "auth_context": {
+        "provider": "local_stub",
+        "subject": "tmt.lead",
+        "assurance_level": "dev_stub",
+        "environment": "local",
+        "issued_at": "2026-04-08T11:00:00Z",
+        "expires_at": "2026-04-08T20:00:00Z"
+      },
+      "preferences": {
+        "selected_desk": "TMT",
+        "saved_view": "intraday",
+        "default_route": "triage"
+      }
+    },
+    {
+      "session_id": "session-tmt-analyst",
+      "actor": {
+        "actor_id": "actor-tmt-analyst",
+        "actor_type": "human",
+        "display_name": "TMTAnalyst",
+        "role_key": "analyst"
+      },
+      "auth_context": {
+        "provider": "local_stub",
+        "subject": "tmt.analyst",
+        "assurance_level": "dev_stub",
+        "environment": "local",
+        "issued_at": "2026-04-08T11:00:00Z",
+        "expires_at": "2026-04-08T20:00:00Z"
+      },
+      "preferences": {
+        "selected_desk": "TMT",
+        "saved_view": "watch_only",
+        "default_route": "triage"
+      }
+    },
+    {
+      "session_id": "session-machine-worker",
+      "actor": {
+        "actor_id": "actor-worker",
+        "actor_type": "machine",
+        "display_name": "foundation-worker",
+        "role_key": "machine"
+      },
+      "auth_context": {
+        "provider": "local_stub",
+        "subject": "worker.system",
+        "assurance_level": "dev_stub",
+        "environment": "local",
+        "issued_at": "2026-04-08T11:00:00Z",
+        "expires_at": "2026-04-08T20:00:00Z"
+      },
+      "preferences": {
+        "selected_desk": "cross_desk",
+        "saved_view": "pre_market",
+        "default_route": "triage"
+      }
+    }
+  ],
+  "role_grants": [
+    {
+      "grant_id": "grant-analysis-cross",
+      "actor_id": "actor-analysis-lead",
+      "actor_type": "human",
+      "role_key": "analysis_lead",
+      "scope_kind": "desk",
+      "desk": "cross_desk",
+      "coverage_entity_id": null,
+      "is_primary": true,
+      "grant_source": "seed",
+      "starts_at": null,
+      "ends_at": null,
+      "status": "active",
+      "created_by": "seed",
+      "updated_by": "seed"
+    },
+    {
+      "grant_id": "grant-tmt-lead-desk",
+      "actor_id": "actor-tmt-lead",
+      "actor_type": "human",
+      "role_key": "sector_lead",
+      "scope_kind": "desk",
+      "desk": "TMT",
+      "coverage_entity_id": null,
+      "is_primary": true,
+      "grant_source": "seed",
+      "starts_at": null,
+      "ends_at": null,
+      "status": "active",
+      "created_by": "seed",
+      "updated_by": "seed"
+    },
+    {
+      "grant_id": "grant-tmt-analyst-nvda",
+      "actor_id": "actor-tmt-analyst",
+      "actor_type": "human",
+      "role_key": "analyst",
+      "scope_kind": "coverage_entity",
+      "desk": "TMT",
+      "coverage_entity_id": "coverage-nvda",
+      "is_primary": true,
+      "grant_source": "seed",
+      "starts_at": null,
+      "ends_at": null,
+      "status": "active",
+      "created_by": "seed",
+      "updated_by": "seed"
+    },
+    {
+      "grant_id": "grant-worker-global",
+      "actor_id": "actor-worker",
+      "actor_type": "machine",
+      "role_key": "machine",
+      "scope_kind": "global",
+      "desk": null,
+      "coverage_entity_id": null,
+      "is_primary": true,
+      "grant_source": "seed",
+      "starts_at": null,
+      "ends_at": null,
+      "status": "active",
+      "created_by": "seed",
+      "updated_by": "seed"
+    }
+  ],
+  "coverage_entities": [
+    {
+      "coverage_entity_id": "coverage-nvda",
+      "desk": "TMT",
+      "subsector": "Semis",
+      "coverage_tier": "tier_1",
+      "primary_owner": {
+        "actor_id": "actor-tmt-analyst",
+        "actor_type": "human",
+        "display_name": "TMTAnalyst",
+        "role_key": "analyst"
+      },
+      "backup_reviewer": {
+        "actor_id": "actor-analysis-lead",
+        "actor_type": "human",
+        "display_name": "AnalysisLead",
+        "role_key": "analysis_lead"
+      }
+    },
+    {
+      "coverage_entity_id": "coverage-msft",
+      "desk": "TMT",
+      "subsector": "Software",
+      "coverage_tier": "tier_1",
+      "primary_owner": {
+        "actor_id": "actor-tmt-lead",
+        "actor_type": "human",
+        "display_name": "TMTLead",
+        "role_key": "sector_lead"
+      },
+      "backup_reviewer": {
+        "actor_id": "actor-analysis-lead",
+        "actor_type": "human",
+        "display_name": "AnalysisLead",
+        "role_key": "analysis_lead"
+      }
+    }
+  ],
+  "approval_policy_rows": [
+    {
+      "policy_key": "tmt_default",
+      "desk": "TMT",
+      "coverage_entity_id": null,
+      "default_reviewer_role": "sector_lead",
+      "default_required_approver_role": "analysis_lead",
+      "requires_research_lead_if_score_gte": 4,
+      "requires_research_lead_on_regulatory_flag": true,
+      "requires_research_lead_on_event_risk_flag": true,
+      "adds_parallel_macro_review_on_macro_shock": true
+    },
+    {
+      "policy_key": "cross_desk_packet",
+      "desk": "cross_desk",
+      "coverage_entity_id": null,
+      "default_reviewer_role": "analysis_lead",
+      "default_required_approver_role": "analysis_lead",
+      "requires_research_lead_if_score_gte": 4,
+      "requires_research_lead_on_regulatory_flag": true,
+      "requires_research_lead_on_event_risk_flag": true,
+      "adds_parallel_macro_review_on_macro_shock": true
+    }
+  ],
+  "entity_scope_index": [
+    {
+      "entity_type": "source_ref",
+      "entity_id": "source-ref-nvda-20260408-01",
+      "coverage_entity_id": "coverage-nvda",
+      "desk": "TMT"
+    },
+    {
+      "entity_type": "report",
+      "entity_id": "report-nvda-intraday",
+      "coverage_entity_id": "coverage-nvda",
+      "desk": "TMT"
+    },
+    {
+      "entity_type": "recommendation_packet",
+      "entity_id": "packet-tmt-20260408",
+      "coverage_entity_id": null,
+      "desk": "TMT"
+    }
+  ],
+  "outbox_events": [
+    {
+      "event_id": "evt-assignment-1001",
+      "sequence": 1001,
+      "event_type": "assignment.updated",
+      "channel_keys": ["me", "desk:TMT", "coverage_entity:coverage-nvda"],
+      "entity_type": "source_ref",
+      "entity_id": "source-ref-nvda-20260408-01",
+      "entity_version": 3,
+      "workflow_id": "wf-triage-nvda",
+      "correlation_id": "corr-triage-1001",
+      "actor_id": "actor-tmt-lead",
+      "actor_type": "human",
+      "payload_json": {
+        "previous_owner": null,
+        "owner": {
+          "actor_id": "actor-tmt-analyst",
+          "actor_type": "human",
+          "display_name": "TMTAnalyst",
+          "role_key": "analyst"
+        },
+        "triage_classification": "direct_support",
+        "triage_status": "classified",
+        "routing_tags": ["intraday"],
+        "next_deadline_at": "2026-04-08T13:45:00Z"
+      },
+      "occurred_at": "2026-04-08T11:50:00Z",
+      "committed_at": "2026-04-08T11:50:01Z"
+    },
+    {
+      "event_id": "evt-lock-1002",
+      "sequence": 1002,
+      "event_type": "lock.changed",
+      "channel_keys": ["me", "desk:TMT", "entity:report:report-nvda-intraday"],
+      "entity_type": "report",
+      "entity_id": "report-nvda-intraday",
+      "entity_version": 4,
+      "workflow_id": "wf-report-nvda",
+      "correlation_id": "corr-lock-1002",
+      "actor_id": "actor-tmt-analyst",
+      "actor_type": "human",
+      "payload_json": {
+        "lock": {
+          "lock_id": "lock-report-nvda",
+          "entity_type": "report",
+          "entity_id": "report-nvda-intraday",
+          "holder": {
+            "actor_id": "actor-tmt-analyst",
+            "actor_type": "human",
+            "display_name": "TMTAnalyst",
+            "role_key": "analyst"
+          },
+          "status": "held",
+          "acquired_at": "2026-04-08T11:55:00Z",
+          "expires_at": "2026-04-08T12:25:00Z"
+        }
+      },
+      "occurred_at": "2026-04-08T11:55:00Z",
+      "committed_at": "2026-04-08T11:55:02Z"
+    },
+    {
+      "event_id": "evt-stale-1003",
+      "sequence": 1003,
+      "event_type": "stale_state.updated",
+      "channel_keys": ["desk:cross_desk", "desk:TMT", "coverage_entity:coverage-nvda"],
+      "entity_type": "source_ref",
+      "entity_id": "source-ref-nvda-20260408-01",
+      "entity_version": 3,
+      "workflow_id": "wf-triage-nvda",
+      "correlation_id": "corr-stale-1003",
+      "actor_id": "actor-worker",
+      "actor_type": "machine",
+      "payload_json": {
+        "stale_state": {
+          "entity_type": "source_ref",
+          "entity_id": "source-ref-nvda-20260408-01",
+          "status": "fresh",
+          "reason_codes": [],
+          "updated_at": "2026-04-08T11:57:00Z"
+        }
+      },
+      "occurred_at": "2026-04-08T11:57:00Z",
+      "committed_at": "2026-04-08T11:57:03Z"
+    }
+  ],
+  "audit_events": [
+    {
+      "event_id": "audit-triage-1001",
+      "event_type": "source_ref.assignment.updated",
+      "actor_id": "actor-tmt-lead",
+      "actor_type": "human",
+      "subject_actor_id": "actor-tmt-analyst",
+      "role_key": "sector_lead",
+      "scope_kind": "desk",
+      "desk": "TMT",
+      "coverage_entity_id": "coverage-nvda",
+      "reason_code": "coverage_handoff",
+      "correlation_id": "corr-triage-1001",
+      "occurred_at": "2026-04-08T11:50:01Z"
+    },
+    {
+      "event_id": "audit-lock-1002",
+      "event_type": "report.lock.changed",
+      "actor_id": "actor-tmt-analyst",
+      "actor_type": "human",
+      "subject_actor_id": "actor-tmt-analyst",
+      "role_key": "analyst",
+      "scope_kind": "coverage_entity",
+      "desk": "TMT",
+      "coverage_entity_id": "coverage-nvda",
+      "reason_code": null,
+      "correlation_id": "corr-lock-1002",
+      "occurred_at": "2026-04-08T11:55:02Z"
+    },
+    {
+      "event_id": "audit-stale-1003",
+      "event_type": "source_ref.stale_state.updated",
+      "actor_id": "actor-worker",
+      "actor_type": "machine",
+      "subject_actor_id": "actor-worker",
+      "role_key": "machine",
+      "scope_kind": "global",
+      "desk": null,
+      "coverage_entity_id": "coverage-nvda",
+      "reason_code": null,
+      "correlation_id": "corr-stale-1003",
+      "occurred_at": "2026-04-08T11:57:03Z"
+    }
+  ],
+  "locks": [
+    {
+      "lock_id": "lock-report-nvda",
+      "entity_type": "report",
+      "entity_id": "report-nvda-intraday",
+      "holder": {
+        "actor_id": "actor-tmt-analyst",
+        "actor_type": "human",
+        "display_name": "TMTAnalyst",
+        "role_key": "analyst"
+      },
+      "status": "held",
+      "acquired_at": "2026-04-08T11:55:00Z",
+      "expires_at": "2026-04-08T12:25:00Z"
+    }
+  ],
+  "stale_states": [
+    {
+      "entity_type": "source_ref",
+      "entity_id": "source-ref-nvda-20260408-01",
+      "status": "fresh",
+      "reason_codes": [],
+      "updated_at": "2026-04-08T11:57:00Z"
+    }
+  ]
+}
+
