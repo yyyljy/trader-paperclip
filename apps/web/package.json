@@ -8,7 +8,7 @@
     "dev": "pnpm exec vite",
     "preview": "pnpm exec vite preview",
     "typecheck": "pnpm exec tsc --noEmit -p tsconfig.json",
-    "test": "pnpm exec vitest run --config ../../vitest.config.ts"
+    "test": "pnpm --dir ../.. exec vitest run --project web --config vitest.config.ts"
   },
   "dependencies": {
     "@trader-paperclip/config": "workspace:*",

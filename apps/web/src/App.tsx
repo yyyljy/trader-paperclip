@@ -1,282 +1,440 @@
 import { parseWebEnv } from "@trader-paperclip/config";
-import { type BootstrapResponse, workbenchRouteKeys } from "@trader-paperclip/contracts";
+import {
+  type BootstrapResponse,
+  type ErrorEnvelope,
+  type WorkbenchRouteKey,
+  workbenchRouteKeys
+} from "@trader-paperclip/contracts";
 import { useEffect, useState } from "react";
+import {
+  alerts,
+  fallbackBootstrap,
+  routeCopy,
+  routeLayouts,
+  type AlertRecord,
+  type NonEmptyArray,
+  type Tone
+} from "./workbenchData";
 
 const env = parseWebEnv(import.meta.env as Record<string, string | boolean | undefined>);
 
-const fallbackBootstrap: BootstrapResponse = {
-  principal: {
-    session_id: "fallback-session",
-    actor: {
-      actor_id: "actor-analysis-lead",
-      actor_type: "human",
-      display_name: "AnalysisLead",
-      role_key: "analysis_lead"
-    },
-    auth_context: {
-      provider: "local_stub",
-      subject: "analysis.lead",
-      assurance_level: "dev_stub",
-      environment: "local",
-      issued_at: "2026-04-08T11:00:00Z",
-      expires_at: "2026-04-08T20:00:00Z"
-    },
-    role_assignments: [
-      {
-        role_key: "analysis_lead",
-        scope_kind: "desk",
-        desk: "cross_desk",
-        coverage_entity_id: null,
-        is_primary: true
-      }
-    ],
-    preferences: {
-      selected_desk: "cross_desk",
-      saved_view: "pre_market",
-      default_route: "triage"
-    }
-  },
-  route_scope: {
-    can_access_workbench: true,
-    routes: {
-      triage: true,
-      drafts: true,
-      review: true,
-      session_board: true,
-      packet_desk: true
-    }
-  },
-  role_assignments: [
-    {
-      role_key: "analysis_lead",
-      scope_kind: "desk",
-      desk: "cross_desk",
-      coverage_entity_id: null,
-      is_primary: true
-    }
-  ],
-  coverage_scopes: [],
-  approval_policy_rows: [],
-  feature_flags: {
-    triage_board: true,
-    draft_workspace: true,
-    review_queue: true,
-    session_board: true,
-    packet_desk: true,
-    diff_modal: true,
-    sse_replay: true
-  },
-  shell_defaults: {
-    default_route: "triage",
-    saved_view: "pre_market",
-    active_session_date: "2026-04-08",
-    timezone: "America/New_York"
-  },
-  stream: {
-    url: `${env.VITE_SSE_BASE_URL}/v1/events/stream?channels=me,desk:cross_desk`,
-    heartbeat_interval_sec: 15,
-    retry_ms: 2000,
-    authorized_channels: ["me", "desk:cross_desk"]
-  },
-  freshness: {
-    as_of_timestamp: "2026-04-08T12:00:00Z",
-    session_date: "2026-04-08"
-  }
+type BlockingStateKind = "signed_out" | "expired" | "access_denied" | "boundary_error";
+
+interface BlockingState {
+  kind: BlockingStateKind;
+  title: string;
+  body: string;
+  actionLabel?: string;
+  support?: string;
+}
+
+interface BannerState {
+  title: string;
+  body: string;
+}
+
+const initialSelectedIds: Record<WorkbenchRouteKey, string> = {
+  triage: routeLayouts.triage.items[0].id,
+  drafts: routeLayouts.drafts.items[0].id,
+  review: routeLayouts.review.items[0].id,
+  session_board: routeLayouts.session_board.items[0].id,
+  packet_desk: routeLayouts.packet_desk.items[0].id
 };
 
-function formatTimestamp(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(new Date(value));
+function resolvePreferredRoute(bootstrap: BootstrapResponse): WorkbenchRouteKey {
+  return (
+    workbenchRouteKeys.find((routeKey) => bootstrap.route_scope.routes[routeKey]) ??
+    bootstrap.shell_defaults.default_route
+  );
+}
+
+function resolveBootstrapRoute(bootstrap: BootstrapResponse): WorkbenchRouteKey {
+  return bootstrap.route_scope.routes[bootstrap.shell_defaults.default_route]
+    ? bootstrap.shell_defaults.default_route
+    : resolvePreferredRoute(bootstrap);
+}
+
+function mapBlockingState(status: number, envelope: Partial<ErrorEnvelope> | null): BlockingState | null {
+  if (status === 401 && envelope?.error === "session_expired") {
+    return { kind: "expired", title: "Session expired", body: "Your workbench session ended. Sign in again to continue.", actionLabel: "Sign in again" };
+  }
+
+  if (status === 401) {
+    return { kind: "signed_out", title: "Sign in required", body: "You need an active workbench session to open the analyst desk.", actionLabel: "Sign in" };
+  }
+
+  if (status === 403 && envelope?.error === "workbench_scope_missing") {
+    return {
+      kind: "access_denied",
+      title: "Workbench access not granted",
+      body: "You are signed in, but your current account does not have workbench scope in this environment.",
+      support: "If you should have access, ask BackendLead or PlatformLead to verify your active role grants."
+    };
+  }
+
+  if (status === 403 && envelope?.error === "human_session_required") {
+    return { kind: "boundary_error", title: "Human session required", body: "This route cannot open from a machine-only session.", actionLabel: "Reload shell" };
+  }
+
+  return null;
+}
+
+function selectOrFallback<T extends { id: string }>(items: NonEmptyArray<T>, id: string): T {
+  return items.find((item) => item.id === id) ?? items[0];
+}
+
+function getAlertCounts(records: readonly AlertRecord[]) {
+  return {
+    open: records.filter((record) => record.status !== "linked").length,
+    urgent: records.filter((record) => record.status === "escalated").length,
+    degraded: records.filter((record) => record.freshness !== "healthy").length
+  };
+}
+
+function getPrimaryAlertAction(alert: AlertRecord) {
+  if (alert.status === "new") {
+    return "Acknowledge";
+  }
+
+  if (alert.requiresIntradayUpdate && alert.status !== "linked") {
+    return "Create or Link Intraday Update";
+  }
+
+  return alert.status === "linked" ? "Open Linked Work" : "Link Source";
 }
 
 function App() {
   const [bootstrap, setBootstrap] = useState<BootstrapResponse>(fallbackBootstrap);
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [banner, setBanner] = useState<BannerState | null>(null);
+  const [blockingState, setBlockingState] = useState<BlockingState | null>(null);
+  const [selectedRoute, setSelectedRoute] = useState<WorkbenchRouteKey>(fallbackBootstrap.shell_defaults.default_route);
+  const [selectedIds, setSelectedIds] = useState<Record<WorkbenchRouteKey, string>>(initialSelectedIds);
+  const [expandedAlerts, setExpandedAlerts] = useState(false);
+  const [selectedAlertId, setSelectedAlertId] = useState(alerts[0].id);
 
   useEffect(() => {
     const controller = new AbortController();
 
-    const loadBootstrap = async () => {
+    async function loadBootstrap() {
       try {
-        const response = await fetch(
-          `${env.VITE_API_BASE_URL}/v1/workbench/bootstrap?session_id=session-analysis-lead`,
-          {
-            signal: controller.signal
-          }
-        );
+        const response = await fetch(`${env.VITE_API_BASE_URL}/v1/workbench/bootstrap?session_id=session-analysis-lead`, { signal: controller.signal });
 
         if (!response.ok) {
-          throw new Error(`Bootstrap request failed with ${response.status}`);
+          let envelope: Partial<ErrorEnvelope> | null = null;
+
+          try {
+            envelope = (await response.json()) as Partial<ErrorEnvelope>;
+          } catch {
+            envelope = null;
+          }
+
+          const mapped = mapBlockingState(response.status, envelope);
+
+          if (mapped) {
+            setBlockingState(mapped);
+            setBanner(null);
+            return;
+          }
+
+          throw new Error(envelope?.message ?? `Bootstrap request failed with ${response.status}`);
         }
 
         const payload = (await response.json()) as BootstrapResponse;
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
         setBootstrap(payload);
-        setError(null);
+        setSelectedRoute(resolveBootstrapRoute(payload));
+        setBlockingState(
+          payload.route_scope.can_access_workbench
+            ? null
+            : {
+                kind: "access_denied",
+                title: "Workbench access not granted",
+                body: "You are signed in, but your current account does not have workbench scope in this environment.",
+                support: "If you should have access, ask BackendLead or PlatformLead to verify your active role grants."
+              }
+        );
+        setBanner(null);
       } catch (caughtError) {
         if (controller.signal.aborted) {
           return;
         }
 
-        setError(caughtError instanceof Error ? caughtError.message : "Bootstrap request failed.");
+        setBlockingState(null);
+        setBanner({ title: "Bootstrap fallback in use.", body: caughtError instanceof Error ? caughtError.message : "Bootstrap request failed." });
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false);
         }
       }
-    };
+    }
 
     void loadBootstrap();
 
-    return () => {
-      controller.abort();
-    };
+    return () => controller.abort();
   }, []);
 
+  const currentRoute = routeLayouts[selectedRoute];
+  const selectedRow = selectOrFallback(currentRoute.items, selectedIds[selectedRoute]);
+  const selectedAlert = selectOrFallback(alerts, selectedAlertId);
+  const alertCounts = getAlertCounts(alerts);
+  const isShellEntryState = blockingState !== null && blockingState.kind !== "expired";
+  const streamTone: Tone =
+    blockingState?.kind === "expired"
+      ? "warn"
+      : blockingState
+        ? "muted"
+        : banner
+          ? "warn"
+          : loading
+            ? "muted"
+            : "good";
+
   return (
-    <div className="app-shell">
-      <header className="top-bar">
-        <div className="brand-block">
-          <p className="eyebrow">Paperclip Phase 1</p>
-          <h1>Paperclip Analyst Workbench</h1>
-          <p className="lede">
-            Dense desk workflows, server-owned permissions, and one replayable SSE stream.
-          </p>
+    <div className="workbench-app" aria-busy={loading}>
+      <header className="shell-topbar">
+        <div className="brand-cluster">
+          <div className="brand-mark">P1</div>
+          <div className="brand-copy">
+            <p className="eyebrow">Desktop Analyst Desk</p>
+            <h1>Paperclip Analyst Workbench</h1>
+            <p className="lede">Five primary destinations, one shared alert operating surface, and server-owned permissions from bootstrap through action bars.</p>
+          </div>
         </div>
-
-        <div className="meta-block">
-          <span className={bootstrap.route_scope.can_access_workbench ? "status-pill is-good" : "status-pill is-warn"}>
-            {bootstrap.route_scope.can_access_workbench ? "Workbench Ready" : "Access Blocked"}
-          </span>
-          <p>{bootstrap.principal.actor.display_name}</p>
-          <p>{bootstrap.principal.actor.role_key}</p>
-        </div>
-
-        <div className="meta-block">
-          <p>{formatTimestamp(bootstrap.freshness.as_of_timestamp)}</p>
-          <p>{bootstrap.shell_defaults.timezone}</p>
-          <p>{bootstrap.principal.preferences.selected_desk}</p>
+        <div className="topbar-strip">
+          <button className="chip-button" type="button">Cmd/Ctrl + K</button>
+          {isShellEntryState ? (
+            <section className="meta-chip">
+              <span className={`status-pill is-${streamTone}`}>Blocked</span>
+              <strong>Shell entry state</strong>
+              <small>{blockingState.title}</small>
+            </section>
+          ) : (
+            <>
+              <button aria-expanded={expandedAlerts} className={expandedAlerts ? "chip-button is-accent" : "chip-button"} onClick={() => setExpandedAlerts((current) => !current)} type="button">
+                Alerts
+                <strong>{alertCounts.open}</strong>
+                <span>{alertCounts.urgent} urgent</span>
+              </button>
+              <section className="meta-chip">
+                <span className={`status-pill is-${streamTone}`}>{loading ? "Booting" : banner ? "Fallback mode" : blockingState ? "Blocked" : "Stream ready"}</span>
+                <strong>{bootstrap.stream.authorized_channels.length} channels</strong>
+                <small>{bootstrap.principal.actor.display_name}</small>
+              </section>
+              <section className="meta-chip">
+                <span className="eyebrow">Session</span>
+                <strong>{bootstrap.shell_defaults.active_session_date}</strong>
+                <small>{bootstrap.principal.preferences.saved_view.replaceAll("_", " ")}</small>
+              </section>
+            </>
+          )}
         </div>
       </header>
-
-      {error ? (
-        <section className="banner warning-banner" role="alert">
-          <strong>Bootstrap fallback in use.</strong>
-          <span>{error}</span>
+      {banner ? (
+        <section className="global-banner is-warning" role="alert">
+          <strong>{banner.title}</strong>
+          <span>{banner.body}</span>
         </section>
       ) : null}
-
-      <main className="workspace-grid" aria-busy={loading}>
-        <section className="surface surface-overview">
-          <div className="surface-header">
-            <div>
-              <p className="eyebrow">Route Scope</p>
-              <h2>Shell Access</h2>
-            </div>
-            <p className="surface-copy">
-              The workbench surface stays server-driven. Roles, routes, and channels come from the bootstrap contract.
-            </p>
+      {isShellEntryState ? (
+        <section className="screen-stage">
+          <div className="shell-entry">
+            <p className="eyebrow">Shell state</p>
+            <h3>{blockingState.title}</h3>
+            <p>{blockingState.body}</p>
+            {blockingState.support ? <p className="support-note">{blockingState.support}</p> : null}
+            {blockingState.actionLabel ? <button className="action-button is-primary" onClick={() => window.location.reload()} type="button">{blockingState.actionLabel}</button> : null}
           </div>
-
-          <div className="metric-grid">
-            <MetricCard label="Role Assignments" value={bootstrap.role_assignments.length} />
-            <MetricCard label="Coverage Scopes" value={bootstrap.coverage_scopes.length} />
-            <MetricCard label="Approval Policies" value={bootstrap.approval_policy_rows.length} />
-            <MetricCard label="Authorized Channels" value={bootstrap.stream.authorized_channels.length} />
+        </section>
+      ) : (
+        <div className="shell-layout">
+        <aside className="nav-rail">
+          <div className="nav-header">
+            <p className="eyebrow">Route rail</p>
+            <strong>{workbenchRouteKeys.filter((routeKey) => bootstrap.route_scope.routes[routeKey]).length} routes visible</strong>
+            <small>Scope stays server-owned from bootstrap.</small>
           </div>
-
-          <div className="route-list">
-            {workbenchRouteKeys.map((route) => (
-              <article
-                key={route}
-                className={
-                  route === bootstrap.shell_defaults.default_route
-                    ? "route-card is-active"
-                    : "route-card"
-                }
-              >
+          <nav aria-label="Workbench routes" className="nav-list">
+            {workbenchRouteKeys.map((routeKey) => (
+              <button aria-current={routeKey === selectedRoute ? "page" : undefined} className={routeKey === selectedRoute ? "nav-button is-active" : "nav-button"} disabled={!bootstrap.route_scope.routes[routeKey] || Boolean(blockingState)} key={routeKey} onClick={() => setSelectedRoute(routeKey)} type="button">
                 <div>
-                  <p className="eyebrow">Route</p>
-                  <h3>{route.replaceAll("_", " ")}</h3>
+                  <strong>{routeCopy[routeKey].label}</strong>
+                  <small>{routeCopy[routeKey].summary}</small>
                 </div>
-                <p>{bootstrap.route_scope.routes[route] ? "Granted in current scope" : "Hidden by policy"}</p>
-              </article>
+                <span className={bootstrap.route_scope.routes[routeKey] ? "nav-state is-good" : "nav-state is-muted"}>{bootstrap.route_scope.routes[routeKey] ? "Open" : "Hidden"}</span>
+              </button>
             ))}
-          </div>
-        </section>
-
-        <section className="surface">
-          <div className="surface-header">
+          </nav>
+        </aside>
+        <section className="screen-stage">
+          <header className="screen-header">
             <div>
-              <p className="eyebrow">Session</p>
-              <h2>Principal Context</h2>
-            </div>
-            <p className="surface-copy">The first local slice stays synthetic, but the session and policy shape matches the shared contract.</p>
-          </div>
-
-          <dl className="detail-grid">
-            <div>
-              <dt>Provider</dt>
-              <dd>{bootstrap.principal.auth_context.provider}</dd>
-            </div>
-            <div>
-              <dt>Session Date</dt>
-              <dd>{bootstrap.shell_defaults.active_session_date}</dd>
-            </div>
-            <div>
-              <dt>Saved View</dt>
-              <dd>{bootstrap.principal.preferences.saved_view}</dd>
-            </div>
-            <div>
-              <dt>Expires</dt>
-              <dd>{formatTimestamp(bootstrap.principal.auth_context.expires_at)}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section className="surface">
-          <div className="surface-header">
-            <div>
-              <p className="eyebrow">Realtime</p>
-              <h2>SSE Contract</h2>
-            </div>
-            <p className="surface-copy">
-              Replay stays explicit, channel-scoped, and aligned with the fixture-backed foundation package.
-            </p>
-          </div>
-
-          <div className="service-list">
-            <article className="service-card">
-              <div className="service-row">
-                <h3>stream url</h3>
-                <span className="status-pill is-good">replayable</span>
+              <p className="eyebrow">{routeCopy[selectedRoute].label}</p>
+              <div className="screen-title-row">
+                <h2>{routeCopy[selectedRoute].title}</h2>
+                <span className="count-pill">{currentRoute.items.length} items</span>
               </div>
-              <p>{bootstrap.stream.url}</p>
-              <small>Retry {bootstrap.stream.retry_ms}ms, heartbeat {bootstrap.stream.heartbeat_interval_sec}s</small>
-            </article>
-            <article className="service-card">
-              <div className="service-row">
-                <h3>authorized channels</h3>
-                <span className="status-pill is-good">{bootstrap.stream.authorized_channels.length}</span>
+              <p className="screen-copy">{routeCopy[selectedRoute].summary}</p>
+            </div>
+            <div className="screen-actions">
+              <div className="filter-row">
+                <span className="filter-chip">{routeCopy[selectedRoute].filterSummary}</span>
+                <span className="filter-chip">row anchor preserved</span>
+                <span className="filter-chip">server-owned blockers</span>
               </div>
-              <p>{bootstrap.stream.authorized_channels.join(", ")}</p>
-              <small>Derived from role grants, desk scope, and selected workbench context.</small>
-            </article>
-          </div>
+              <button className="action-button is-primary" disabled={Boolean(blockingState) || !bootstrap.route_scope.routes[selectedRoute]} type="button">
+                {routeCopy[selectedRoute].primaryAction}
+              </button>
+            </div>
+          </header>
+          <>
+            {currentRoute.summary ? (
+              <div className="summary-band">
+                {currentRoute.summary.map((card) => (
+                  <article className="summary-card" key={card.label}>
+                    <p className="eyebrow">{card.label}</p>
+                    <strong>{card.value}</strong>
+                    <small>{card.note}</small>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+            <div className="surface-grid two-up">
+              <section className="surface-card">
+                <div className="section-top">
+                  <div>
+                    <p className="eyebrow">Primary surface</p>
+                    <h3>{currentRoute.listLabel}</h3>
+                  </div>
+                  <span className={`status-pill is-${selectedRow.tone}`}>{selectedRow.kicker}</span>
+                </div>
+                <div className="row-list">
+                  {currentRoute.items.map((item) => (
+                    <button className={item.id === selectedRow.id ? "row-button is-active" : "row-button"} key={item.id} onClick={() => setSelectedIds((currentIds) => ({ ...currentIds, [selectedRoute]: item.id }))} type="button">
+                      <div className="row-title-row">
+                        <div>
+                          <p className="row-kicker">{item.kicker}</p>
+                          <strong>{item.title}</strong>
+                        </div>
+                        <span className={`status-pill is-${item.tone}`}>{item.note}</span>
+                      </div>
+                      <div className="row-meta">{item.meta.map((entry) => <span key={entry}>{entry}</span>)}</div>
+                    </button>
+                  ))}
+                </div>
+              </section>
+              <aside className="surface-card is-detail">
+                <div className="section-top">
+                  <div>
+                    <p className="eyebrow">Detail surface</p>
+                    <h3>{currentRoute.detailLabel}</h3>
+                  </div>
+                  <span className="status-pill is-muted">{currentRoute.detail.status}</span>
+                </div>
+                <div className="banner-card is-muted">
+                  <strong>{currentRoute.detail.bannerTitle}</strong>
+                  <p>{currentRoute.detail.bannerBody}</p>
+                </div>
+                <dl className="detail-pairs">
+                  {currentRoute.detail.pairs.map(([label, value]) => (
+                    <div key={label}>
+                      <dt>{label}</dt>
+                      <dd>{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <div className="action-row">
+                  {currentRoute.detail.actions.map((action) => (
+                    <button className={action.primary ? "action-button is-primary" : "action-button"} disabled={action.disabled} key={action.label} type="button">
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+                {currentRoute.detail.inlineReason ? <p className="inline-reason">{currentRoute.detail.inlineReason}</p> : null}
+                {currentRoute.detail.blocker ? (
+                  <div className="banner-card is-warning">
+                    <strong>More review steps required</strong>
+                    <p>{currentRoute.detail.blocker}</p>
+                  </div>
+                ) : null}
+              </aside>
+            </div>
+          </>
         </section>
-      </main>
+        <aside className={expandedAlerts ? "alert-dock is-expanded" : "alert-dock"}>
+          <div className="section-top">
+            <div>
+              <p className="eyebrow">Shared operating surface</p>
+              <h3>Alert Inbox</h3>
+            </div>
+            <button className="chip-button" onClick={() => setExpandedAlerts((current) => !current)} type="button">{expandedAlerts ? "Collapse" : "Open inbox"}</button>
+          </div>
+          <div className="summary-band compact">
+            <article className="summary-card"><p className="eyebrow">Open</p><strong>{alertCounts.open}</strong></article>
+            <article className="summary-card"><p className="eyebrow">Urgent</p><strong>{alertCounts.urgent}</strong></article>
+            <article className="summary-card"><p className="eyebrow">Freshness</p><strong>{alertCounts.degraded > 0 ? "Degraded" : "Healthy"}</strong></article>
+          </div>
+          <div className={expandedAlerts ? "alert-inbox-shell" : "mini-list"}>
+            <section className="row-list">
+              {alerts.map((alert) => (
+                <button className={alert.id === selectedAlert.id ? "row-button is-active" : "row-button"} key={alert.id} onClick={() => setSelectedAlertId(alert.id)} type="button">
+                  <div className="row-title-row">
+                    <div>
+                      <p className="row-kicker">{alert.family}</p>
+                      <strong>{alert.symbol}</strong>
+                    </div>
+                    <span className={`status-pill is-${alert.status === "escalated" ? "warn" : "muted"}`}>{alert.status}</span>
+                  </div>
+                  <p>{alert.headline}</p>
+                  <div className="row-meta"><span>{alert.owner}</span><span>{alert.dueAt ?? "No due timer"}</span></div>
+                </button>
+              ))}
+            </section>
+            {expandedAlerts ? (
+              <aside className="surface-card is-detail">
+                <div className="section-top">
+                  <div>
+                    <p className="eyebrow">Alert detail</p>
+                    <h3>{selectedAlert.symbol}</h3>
+                  </div>
+                  <span className={`status-pill is-${selectedAlert.freshness === "healthy" ? "good" : "warn"}`}>{selectedAlert.freshness}</span>
+                </div>
+                <div className="banner-card is-muted">
+                  <strong>Consensus state</strong>
+                  <p>{selectedAlert.consensusState}</p>
+                </div>
+                <dl className="detail-pairs">
+                  <div><dt>Workflow state</dt><dd>{selectedAlert.status}</dd></div>
+                  <div><dt>Assigned owner</dt><dd>{selectedAlert.owner}</dd></div>
+                  <div><dt>Review trigger</dt><dd>{selectedAlert.reviewTrigger}</dd></div>
+                  <div><dt>Due timer</dt><dd>{selectedAlert.dueAt ?? "No due timer"}</dd></div>
+                </dl>
+                <div className="action-row">
+                  <button className="action-button is-primary" type="button">{getPrimaryAlertAction(selectedAlert)}</button>
+                  <button className="action-button" type="button">Assign owner</button>
+                  <button className="action-button" type="button">Resolve</button>
+                </div>
+              </aside>
+            ) : null}
+          </div>
+        </aside>
+      </div>
+      )}
+      {blockingState?.kind === "expired" ? (
+        <div aria-modal="true" className="overlay-state" role="alertdialog">
+          <div className="overlay-panel">
+            <p className="eyebrow">Session boundary</p>
+            <h3>{blockingState.title}</h3>
+            <p>{blockingState.body}</p>
+            <button className="action-button is-primary" onClick={() => window.location.reload()} type="button">{blockingState.actionLabel}</button>
+          </div>
+        </div>
+      ) : null}
     </div>
-  );
-}
-
-function MetricCard(props: { label: string; value: number }) {
-  return (
-    <article className="metric-card">
-      <p className="eyebrow">{props.label}</p>
-      <strong>{props.value}</strong>
-    </article>
   );
 }
 
